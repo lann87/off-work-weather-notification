@@ -5,24 +5,24 @@ After Work Rain Alert
 This script checks the NEA weather forecast for specific areas in Singapore
 and sends you notifications (desktop + Telegram) if rain is coming.
 
-It only runs after 5:30pm to help you decide if it's safe to bike home.
+It only runs after 5:30pm to help decide if it's safe to bike home.
 """
 
 import requests          # For making HTTP requests to APIs (getting weather data)
-import subprocess        # For running system commands (desktop notifications)
-import configparser      # For reading config files (Telegram credentials)
+import subprocess        # System commands for desktop notifications
+import configparser      # Telegram bot credentials
 import os                # For file path operations
 from datetime import datetime  # For working with dates and times
 
 # The URL of NEA's weather API endpoint
-# This is a public API that returns weather forecasts in JSON format
+# This is a public API that returns SG's weather forecasts in JSON format
 API_URL = "https://api.data.gov.sg/v1/environment/2-hour-weather-forecast"
 
 # File to track when we last ran the script (prevents spam)
 # Stored in home directory as a hidden file
 LAST_RUN_FILE = os.path.expanduser("~/.weather_last_run.txt")
 
-# List of Singapore areas you want to monitor
+# List of Singapore areas I am monitoring
 # These must match the exact names NEA uses in their API
 MONITORED_AREAS = [
     "Tampines",
