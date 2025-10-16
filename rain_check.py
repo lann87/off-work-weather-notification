@@ -11,11 +11,16 @@ It only runs after 5:30pm to help you decide if it's safe to bike home.
 import requests          # For making HTTP requests to APIs (getting weather data)
 import subprocess        # For running system commands (desktop notifications)
 import configparser      # For reading config files (Telegram credentials)
+import os                # For file path operations
 from datetime import datetime  # For working with dates and times
 
 # The URL of NEA's weather API endpoint
 # This is a public API that returns weather forecasts in JSON format
 API_URL = "https://api.data.gov.sg/v1/environment/2-hour-weather-forecast"
+
+# File to track when we last ran the script (prevents spam)
+# Stored in home directory as a hidden file
+LAST_RUN_FILE = os.path.expanduser("~/.weather_last_run.txt")
 
 # List of Singapore areas you want to monitor
 # These must match the exact names NEA uses in their API
@@ -46,6 +51,46 @@ def get_weather():
     """
     response = requests.get(API_URL)  # Make HTTP request
     return response.json()            # Convert JSON response to Python dict
+
+def check_already_ran_today():
+    """
+    Checks if the script already ran today to prevent spam.
+    
+    How it works:
+    1. Tries to read the last run date from a file
+    2. Compares it with today's date
+    3. Returns True if already ran today, False otherwise
+    
+    Returns:
+        bool: True if already ran today, False otherwise
+    """
+    today = datetime.now().strftime('%Y-%m-%d')  # Get today's date (e.g., "2025-10-16")
+    
+    # Check if the tracking file exists
+    if os.path.exists(LAST_RUN_FILE):
+        # Read the last run date from the file
+        with open(LAST_RUN_FILE, 'r') as f:
+            last_run_date = f.read().strip()  # Remove any whitespace
+        
+        # If last run was today, we already ran
+        if last_run_date == today:
+            return True
+    
+    # Either file doesn't exist or last run was a different day
+    return False
+
+def update_last_run():
+    """
+    Updates the last run file with today's date.
+    
+    This marks that we successfully ran today, so we won't run again
+    until tomorrow.
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    # Write today's date to the file
+    with open(LAST_RUN_FILE, 'w') as f:
+        f.write(today)
 
 def send_telegram(message):
     """
@@ -109,10 +154,12 @@ def main():
     
     Process flow:
     1. Check if it's after 5:30pm (only run during biking hours)
-    2. Fetch weather data from NEA API
-    3. Filter data to only your monitored areas
-    4. Check if any area has bad weather (rain keywords)
-    5. Send notifications via desktop + Telegram
+    2. Check if we already ran today (prevent spam)
+    3. Fetch weather data from NEA API
+    4. Filter data to only your monitored areas
+    5. Check if any area has bad weather (rain keywords)
+    6. Send notifications via desktop + Telegram
+    7. Mark that we ran today
     """
     
     # STEP 1: Time Check - Only run after 5:30pm
@@ -122,18 +169,27 @@ def main():
     
     # Check if it's before 5:30pm
     # Logic: If hour < 17 (before 5pm) OR (hour is 17 but minute < 30)
-    # if current_hour < 17 or (current_hour == 17 and current_minute < 30):
-    #     print("Too early - script runs after 5:30pm only")
-    #     return  # Exit the function early
+    # COMMENTED OUT FOR TESTING - Uncomment these lines to enable time restriction
+    if current_hour < 17 or (current_hour == 17 and current_minute < 30):
+        print("Too early - script runs after 5:30pm only")
+        return  # Exit the function early
     
-    # STEP 2: Fetch Weather Data
+    # STEP 2: Check if Already Ran Today (Prevent Spam)
+    
+    if check_already_ran_today():
+        # Already ran today, exit silently without any output
+        # This prevents you from getting spammed with notifications
+        # every time you reconnect WiFi
+        return
+    
+    # STEP 3: Fetch Weather Data
     
     data = get_weather()  # Call our function to get data from NEA
     
     # Extract the forecasts list from the nested structure
     forecasts = data['items'][0]['forecasts']
 
-    # STEP 3: Filter to Your Monitored Areas Only
+    # STEP 4: Filter to Your Monitored Areas Only
     
     # Create an empty dictionary to store area -> weather mapping
     # Example: {"Tampines": "Cloudy", "Jurong East": "Rain"}
@@ -147,7 +203,7 @@ def main():
             # Key = area name, Value = forecast text
             my_areas[f['area']] = f['forecast']
     
-    # STEP 4: Prepare Output and Check for Bad Weather
+    # STEP 5: Prepare Output and Check for Bad Weather
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')  # Format as "2025-10-16 17:45"
     
@@ -187,7 +243,7 @@ def main():
     # \n means newline (line break)
     message = "\n".join(output_lines)
     
-    # STEP 5: Send Notifications
+    # STEP 6: Send Notifications
     
     if has_bad_weather:
         # Rain detected! Send warning notifications
@@ -207,6 +263,12 @@ def main():
         # Send both notifications
         show_notification(title, "\n".join(output_lines[1:]))
         send_telegram(f"{title}\n\n{message}")
+    
+    # STEP 7: Mark That We Ran Today
+    
+    # Update the last run file so we don't run again today
+    # This prevents notification spam when you reconnect WiFi multiple times
+    update_last_run()
 
 if __name__ == "__main__":
     main()  # Run the main function
