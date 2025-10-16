@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Singapore Rain Alert for Biking - Simple Version
+After Work Rain Alert
 
 This script checks the NEA weather forecast for specific areas in Singapore
 and sends you notifications (desktop + Telegram) if rain is coming.
